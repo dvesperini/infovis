@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+	<head>
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+
+		<title>PubNub Twitter Stream x Warriors</title>
+		<meta name="description" content="Twitter x Warriors Visualization using PubNub">
+		<meta name="author" content="Lizzie Siegle">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<link rel="stylesheet" href="css/style.css">
+		<script type="text/javascript" src="http://pubnub.github.io/eon/v/eon/0.0.10/eon.js"></script>
+		<link type="text/css" rel="stylesheet" href="http://pubnub.github.io/eon/v/eon/0.0.10/eon.css"/>
+	</head>
+	<body>
+	<header>
+		<h2>Visualizzazione delle principali squadre di calcio del campionato italiano</h2>
+		<p id = "timeHeader">In questa visualizzazione ricaveremo i dati da Twitter e vedremo suale sono le squadre più discusse sul questo social. L'analisi è mirata a dare informazioni rigauardante quale squadra risulta più attiva sul calciomercato estivo e l'andamento delle amichevoli precampionato! </p>
+		<p>Chi si sta muovendo per diventare la prossima regina del calcio italiano?</p>
+	</header>
+		<noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-PZWSZ2" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+		<div class= "playerData">
+			<div id = "hoverImg"></div>
+			<div id = "chart"></div> 
+		</div>
+
+		<div class= "container">
+			<div class = "textContainer">
+				<h4 id = "bestFans">Which fans are tweeting more?</h4>
+				<h4 id= "scrollDiv"></h4>
+			</div>
+			<div id = "scrollDivPic"></div>
+		</div>
+		<div style = "clear: both;"></div>
+<script>
+	var romaWords = [
+	  'as roma', 'di francesco', 'florenzi', '#asroma', '#usa', '#romatour', '#derossi','#nainggolan', '#strootman', '#alisson','#manolas', '#defrel','#florenzi','#baldissoni','#trigoria','#giallorossi', 'giallorossi', 'forza roma', 'noi siamo la roma'
+	];
+	var interWords = [
+	  'perisic', '#icardi', '#Inter', 'Spalletti', '#perisic', 'luciano spalletti','#borja', '#interfc', '#candreva', '#internmilan','#schick', '#InterSummerTour', '#InterIsComing', 'forza inter', '#forzainter', '#FCIM', 'nerazzurri'
+	]
+	var lazioWords = [
+	  'keita', 'auronzo', 'lazio', '#sslazio', 'simone inzaghi', '#ssl', 'sslazio', 'leiva', '#lucasleiva', 'di gennaro', '#digennaro', '#auronzo2017',' felipe andrson',' ciro immobile', '#Strakosha','biancocelesti'
+	]
+	var milanWords = [
+	  'mirabelli', 'montella ', '#bonucci', 'bonucci', 'kessie', '#belotti', 'belotti', 'ac milan', 'rossonerei', '#weareacmilan', '#weareinchina', '#donnarumma', '#conti', 'lucas biglia', 'forza milan'
+	]
+	var napoliWords = [
+	  'hamsik', 'ssc napoli', '#sscnapoli', '#delaurentis', '#ounas', '#reina', '#ritiroazzurro', '#insigne', '#ForzaNapoliSempre', '#sarri', '#rog','#callejon'
+	]
+	var fiorentinaWords = [
+	  'fiorentina', '#laviola', '#acfiorentina', 'pioli', '#fiorentina','#BattitiViola', '#Moena2017','#antognoni', '#Zekhnini','#pioli', 'della valle','#babacar', '#sportiello','saponara', '#kalinic'
+	]
+	var juventusWords = [
+	  'juventus', 'massimiliano allegri', 'max allegri', '#bernardeschi', '#juve', 'de sciglio', 'higuain', 'dybala','#benvenutomattia','de sciglio', 'bianconeri', '#JuventusSummerTour', '#forzajuve', '#khedira', '#finoallafine'
+	]
+	//SI POTREBBE ANALIZZARE QUALCOS'ALTRO
+	/*var dubsTeamWords = [ //NON ESSENZIALE
+	  '#warriors', '#warriorsnation', '#dubnation', '#gsw', '#gswarriors', 'warriors', 'golden state' 
+	]
+	var cavsTeamWords = [          //NON ESSENZIALE
+	  '#clevelandcavs', '#cavaliers', '#cavaliersnation', '#cavsnation', 'cavs', 'cavaliers', 'cleveland cavaliers'
+	]
+	*/
+	
+	var numJuventusWords = 0;
+	var numFiorentinaWords = 0;
+	var numNapoliWords = 0;
+	var numMilanWords = 0;
+	var numLazioWords = 0;
+	var numInterWords = 0;
+	var numRomaWords = 0;
+	//var numDubsTeamWords = 0;    //NON ESSENZIALE
+	//var numCavsTeamWords = 0;           //NON ESSENZIALE
+	var channel = 'pubnub-twitter';
+	var pubnubTweet = PUBNUB.init({
+	  subscribe_key: 'sub-c-78806dd4-42a6-11e4-aed8-02ee2ddab7fe', //get tweets containing key words for Twitter chan
+	  ssl: true
+	}); //pubnub
+	getStreamData();  
+	// fetch previous 75 Tweets, then realtime stream
+	function getStreamData() { //QUI PRENDE I DATI
+       		pubnubTweet.history({
+        			channel: channel,
+        			count: 75,  //COSA CAMBIA SE MODIFICO IL COUNT?
+        			callback: function(messages) {
+        				pubnubTweet.each(messages[0], processData);
+        			}
+      		});
+    		pubnubTweet.subscribe({
+        			channel: channel,
+        			callback: processData
+      		});
+  	}
+	var totalNumTweets = 0;
+	function processData(data) {
+	  if (!data) DOCUMENT.getElementById('chart') = "Data is loading. There will be fewer tweets if it's not gametime or in season.";
+	  /*if (dubsTeamWords.some(function(v) {
+	      return data.text.toLowerCase().indexOf(v) !== -1;
+	    })) {
+	    numDubsTeamWords += 1;
+	    publish2();
+	    console.log(data);
+	  } else*/       // SE SI SCOMMENTA PORTARE SU QUESTA RIGA "if"
+
+
+	   if (milanWords.some(function(v) {
+	      return data.text.toLowerCase().indexOf(v) !== -1;
+	    })) {
+	    numMilanWords += 1;
+	    totalNumTweets += 1;
+	    publish2();
+	    console.log(data);
+	  } else if (romaWords.some(function(v) {
+	      return data.text.toLowerCase().indexOf(v) !== -1;
+	    })) {
+	    numRomaWords += 1;
+	    totalNumTweets += 1;
+	    publish2();
+	    console.log(data);
+	  } else if (interWords.some(function(v) {
+	      return data.text.toLowerCase().indexOf(v) !== -1;
+	    })) {
+	    numInterWords += 1;
+	    totalNumTweets += 1;
+	    publish2();
+	    console.log(data);
+	  } else if (lazioWords.some(function(v) {
+	      return data.text.toLowerCase().indexOf(v) !== -1;
+	    })) {
+	    numLazioWords += 1;
+	    totalNumTweets += 1;
+	    publish2();
+	    console.log(data);
+	  } else if (napoliWords.some(function(v) {
+	      return data.text.toLowerCase().indexOf(v) !== -1;
+	    })) {
+	    numNapoliWords += 1;
+	    totalNumTweets += 1;
+	    publish2();
+	    console.log(data);
+	  } else if (fiorentinaWords.some(function(v) {
+	      return data.text.toLowerCase().indexOf(v) !== -1;
+	    })) {
+	    numFiorentinaWords += 1;
+	    totalNumTweets += 1;
+	    publish2();
+	    console.log(data);
+	  } else if (juventusWords.some(function(v) {
+	      return data.text.toLowerCase().indexOf(v) !== -1;
+	    })) {
+	    numJuventusWords += 1;
+	    totalNumTweets += 1;
+	    publish2();
+	    console.log(data);
+	  } /*else if (cavsTeamWords.some(function(v) {
+	      return data.text.toLowerCase().indexOf(v) !== -1;
+	    })) 
+	    numCavsTeamWords += 1;
+	    publish2();
+	    console.log(data);
+	  } //else if
+	  */
+	 // bestFans();
+	} //processData()
+	/*function bestFans() {          //NON ESSENZIALE
+	  var fanElement = document.getElementById('scrollDiv');
+	  var fanStr = document.createTextNode('Warriors fans are Tweeting more');
+	  var notFanStr = document.createTextNode('Cleveland fans are Tweeting more');
+	  var tieFanStr = document.createTextNode('They\'re tweeting equally!');
+	  if (numDubsTeamWords == numCavsTeamWords) {
+	  	document.getElementById('scrollDivPic').innerHTML = '';
+	    fanElement.innerHTML = tieFanStr;
+	    fanElement.appendChild(tieFanStr);
+	  } //if
+	  else if (numDubsTeamWords > numCavsTeamWords) {
+	    fanElement.innerHTML = fanStr;
+	    document.getElementById('scrollDivPic').innerHTML = "<img src='img/dubsLogo.jpeg' border=0/></a>";
+	    fanElement.appendChild(fanStr);
+	  } else { // # Cavs hashtags > # Warriors hashtags
+	    fanElement.innerHTML = notFanStr;
+	    document.getElementById('scrollDivPic').innerHTML = "<img class = 'resize2' src='img/cavsLogo.png' border=0/></a>";
+	    fanElement.appendChild(notFanStr);
+	  } //else
+	  if (fanElement.childNodes.length >= 1) {
+	    fanElement.removeChild(fanElement.firstChild);
+	  } //if
+	} //bestFans()
+	*/
+	var pubnubEon = PUBNUB.init({      //UGUALE IN RICKSHAW
+	  subscribe_key: 'sub-c-ec13adb2-2164-11e6-9327-02ee2ddab7fe', //different subscribe from Twitter
+	  publish_key: 'pub-c-01ea45a2-75a8-40af-8db0-578d519eed0e' //separate keyset generated, paired with new subscribe key     //UGUALE IN RICKSHAW
+	});
+	//publish chart
+	var nbaChannel = 'NBAChannel';     // PERCHE' NBACHANNEL ??     //MA CAMBIA IL CANALE?
+	function publish2() {
+	  pubnubEon.publish({
+	    	channel: nbaChannel,
+	    	message: {
+	      		eon: {
+	       			"Milan": numMilanWords / totalNumTweets,
+	       			"Roma": numRomaWords / totalNumTweets,
+	        			"Inter": numInterWords / totalNumTweets,
+	        			"Lazio": numLazioWords / totalNumTweets,
+	        			"Napoli": numNapoliWords / totalNumTweets,
+	        			"Fiorentina": numFiorentinaWords / totalNumTweets,
+	        			"Juventus": numJuventusWords / totalNumTweets
+	     		}
+	   	 }, //msg
+	    	callback: function(m) {
+	       		console.log(m)
+	     	} //callback
+	  }); //pubnubEon
+	} //publish
+	//embed chart
+	eon.chart({
+	  channel: nbaChannel,
+	  pubnub: pubnubEon,
+	  generate: {
+	    bindto: '#chart',
+	    data: {
+	      labels: true,
+	      type: 'donut', //SE METTO 'bar' FA I BAR CHARTS, MA VA AGGIUSTATO
+	      colors: {
+	        'Milan': 'red',
+	        'Roma': 'orange',
+	        'Inter': 'blue',
+	        'Lazio': 'pink',
+	        'Fiorentina': 'purple',
+	        'Napoli': 'green',
+	        'Juventus': 'gray',
+	      } //colors	
+	    }, //data
+	    legend: {
+	      show: true,
+	      item: {
+	        onmouseover: function(id) {
+	          //could also get pics easily straight from Warriors website instead of having in img folder
+	          if (id == "Milan") {
+	            document.getElementById('hoverImg').innerHTML = "<img src='img/Milan.png' border=0/></a>";
+	            document.getElementById("hoverImg").style.transitionDuration = "10s";
+	          } else if (id == "Inter") {
+	            document.getElementById('hoverImg').innerHTML = "<img src='img/Inter.png' border=0/></a>";
+	            document.getElementById("hoverImg").style.transitionDuration = "10s";
+	          } else if (id == "Lazio") {
+	            document.getElementById('hoverImg').innerHTML = "<img src='img/Lazio.png' border=0/></a>";
+	            document.getElementById("hoverImg").style.transitionDuration = "10s";
+	          } else if (id == "Roma") {
+	            document.getElementById('hoverImg').innerHTML = "<img src='img/Roma.png' border=0/></a>";
+	            document.getElementById("hoverImg").style.transitionDuration = "10s";
+	          } else if (id == "Fiorentina") {
+	            document.getElementById('hoverImg').innerHTML = "<img src='img/Fiorentina.png' border=0/></a>";
+	            document.getElementById("hoverImg").style.transitionDuration = "10s";
+	          } else if (id == "Juventus") {
+	            document.getElementById('hoverImg').innerHTML = "<img src='img/Juventus.png' border=0/></a>";
+	            document.getElementById("hoverImg").style.transitionDuration = "10s";
+	          }else if (id == "Napoli") {
+	            document.getElementById('hoverImg').innerHTML = "<img src='img/Napoli.png' border=0/></a>";
+	            document.getElementById("hoverImg").style.transitionDuration = "10s";
+	          } 
+	        }, //onmouseover
+	        //onmouseout, img goes away
+	        onmouseout: function(id) {
+	            if (id == "Milan") {
+	              document.getElementById('hoverImg').innerHTML = " ";
+	              document.getElementById("hoverImg").style.transitionDuration = "10s";
+	            } else if (id == "Inter") {
+	              document.getElementById('hoverImg').innerHTML = " ";
+	              document.getElementById("hoverImg").style.transitionDuration = "10s";
+	            } else if (id == "Roma") {
+	              document.getElementById('hoverImg').innerHTML = " ";
+	              document.getElementById("hoverImg").style.transitionDuration = "10s";
+	            } else if (id == "Lazio") {
+	              document.getElementById('hoverImg').innerHTML = " ";
+	              document.getElementById("hoverImg").style.transitionDuration = "10s";
+	            } else if (id == "Fiorentina") {
+	              document.getElementById('hoverImg').innerHTML = " ";
+	              document.getElementById("hoverImg").style.transitionDuration = "10s";
+	            } else if (id == "Juventus") {
+	              document.getElementById('hoverImg').innerHTML = " ";
+	              document.getElementById("hoverImg").style.transitionDuration = "10s";
+	            } else if (id == "Napoli") {
+	              document.getElementById('hoverImg').innerHTML = " ";
+	              document.getElementById("hoverImg").style.transitionDuration = "10s";
+	            }  //last else if
+	          } //onmouseout 	
+	      } //legend.item
+	    }, //legend
+	    tooltip: {
+	      show: false //gets rid of hover legend
+	    },
+	    axis: {
+	      x: {
+	        label: 'Tweet topic'
+	      }, //x
+	      y: {
+	        label: 'Number of Tweets'
+	      } //y
+	    } //axis
+	  } //generate
+	}); //eon.chart
+	</script>
+	</body>
+	<footer>    
+		<img class="logo" src="img/pubnubLogo.png"> 
+		<p id = "leftP">PubNub <a href="https://twitter.com/hashtag/projecteon" target="_blank">#projecteon</a> demo by <a href="https://twitter.com/lizziepika" target="_blank">@lizziepika</a></p>
+	</footer>
+</html>
